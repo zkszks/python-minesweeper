@@ -65,3 +65,38 @@ def test_losing_reveals_mines_and_stops_further_actions():
     assert game.board.grid[0][0].is_revealed
     assert not game.right_click(1, 1)
     assert game.left_click(1, 1).revealed == ()
+
+
+def test_chord_reveals_unflagged_neighbors_when_flag_count_matches():
+    game = Game(Difficulty.BEGINNER, random.Random(1))
+    game.board.grid[0][0].is_mine = True
+    game.board.grid[1][1].is_revealed = True
+    game.board.grid[1][1].adjacent_mines = 1
+    game.board.grid[0][0].is_flagged = True
+    game.board.mines_generated = True
+    result = game.chord(1, 1)
+    assert result.revealed
+    assert not result.hit_mine
+    assert game.board.grid[0][1].is_revealed
+
+
+def test_chord_does_nothing_when_flag_count_does_not_match():
+    game = Game(Difficulty.BEGINNER, random.Random(1))
+    game.board.grid[1][1].is_revealed = True
+    game.board.grid[1][1].adjacent_mines = 1
+    game.board.mines_generated = True
+    result = game.chord(1, 1)
+    assert result.revealed == ()
+    assert not game.board.grid[0][1].is_revealed
+
+
+def test_chord_can_hit_mine_when_matching_flags_are_wrong():
+    game = Game(Difficulty.BEGINNER, random.Random(1))
+    game.board.grid[0][0].is_mine = True
+    game.board.grid[1][1].is_revealed = True
+    game.board.grid[1][1].adjacent_mines = 1
+    game.board.grid[0][1].is_flagged = True
+    game.board.mines_generated = True
+    result = game.chord(1, 1)
+    assert result.hit_mine
+    assert game.status is GameStatus.LOST

@@ -131,6 +131,51 @@ class Game:
         # 委托棋盘切换目标格子的旗子状态。
         return self.board.toggle_flag(row, col)
 
+    # 快速翻开已揭示数字周围所有未插旗的格子。
+    def chord(self, row: int, col: int) -> RevealResult:
+        # 游戏结束后忽略新的快速翻开操作。
+        if self.status in (GameStatus.WON, GameStatus.LOST):
+            # 返回未翻开任何格子的空结果。
+            return RevealResult(())
+        # 拒绝棋盘范围之外的坐标。
+        if not self.board.in_bounds(row, col):
+            # 与普通翻开操作保持相同的越界错误。
+            raise IndexError("坐标超出棋盘范围")
+        # 取得玩家操作的中心格子。
+        cell = self.board.grid[row][col]
+        # 只有已翻开的非零数字格支持快速翻开。
+        if not cell.is_revealed or cell.adjacent_mines == 0:
+            # 条件不满足时不改变棋盘。
+            return RevealResult(())
+        # 取得中心格周围的全部有效坐标。
+        neighbors = self.board.neighbors(row, col)
+        # 统计周围已经插旗的格子数量。
+        flagged_count = sum(self.board.grid[nr][nc].is_flagged for nr, nc in neighbors)
+        # 旗子数量必须与中心数字一致。
+        if flagged_count != cell.adjacent_mines:
+            # 旗子数量不匹配时不执行批量翻开。
+            return RevealResult(())
+        # 收集本次操作实际翻开的全部坐标。
+        revealed: list[tuple[int, int]] = []
+        # 依次处理所有没有插旗且尚未翻开的邻格。
+        for neighbor_row, neighbor_col in neighbors:
+            # 取得当前邻格状态。
+            neighbor = self.board.grid[neighbor_row][neighbor_col]
+            # 跳过已经翻开或已经插旗的邻格。
+            if neighbor.is_revealed or neighbor.is_flagged:
+                # 继续检查下一个邻格。
+                continue
+            # 复用普通左键逻辑，保持计时和输赢处理一致。
+            result = self.left_click(neighbor_row, neighbor_col)
+            # 合并当前邻格触发的所有翻开坐标。
+            revealed.extend(result.revealed)
+            # 错误插旗导致踩雷时立即结束批量操作。
+            if result.hit_mine:
+                # 返回已经翻开的坐标并标记踩雷。
+                return RevealResult(tuple(revealed), hit_mine=True)
+        # 返回成功快速翻开的全部坐标。
+        return RevealResult(tuple(revealed))
+
     # 停止当前游戏的计时器。
     def _stop_timer(self) -> None:
         # 只有计时已经开始时才记录结束时间。

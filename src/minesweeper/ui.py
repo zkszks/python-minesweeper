@@ -5,6 +5,8 @@ import pygame
 
 # 导入游戏状态管理类。
 from .game import Game
+# 导入难度枚举，用于创建难度选择按钮。
+from .config import Difficulty
 # 导入游戏状态枚举。
 from .models import GameStatus
 
@@ -66,6 +68,10 @@ class MinesweeperUI:
     PADDING = 10
     # 定义顶部计分面板的高度。
     HEADER_HEIGHT = 54
+    # 定义难度选择栏的高度。
+    DIFFICULTY_HEIGHT = 30
+    # 定义可容纳三个难度名称的最小窗口宽度。
+    MIN_WINDOW_WIDTH = 350
     # 定义笑脸重开按钮的尺寸。
     FACE_SIZE = 34
 
@@ -83,6 +89,8 @@ class MinesweeperUI:
         self.number_font = pygame.font.SysFont("Arial", 18, bold=True)
         # 创建电子计数器使用的等宽粗体字体。
         self.counter_font = pygame.font.SysFont("Courier New", 28, bold=True)
+        # 创建难度按钮使用的字体。
+        self.menu_font = pygame.font.SysFont("Arial", 14)
         # 根据棋盘配置创建窗口和布局矩形。
         self._create_window()
 
@@ -93,21 +101,54 @@ class MinesweeperUI:
         # 计算棋盘区域的像素高度。
         board_height = self.game.board.height * self.CELL_SIZE
         # 将棋盘宽度与左右留白相加得到窗口宽度。
-        window_width = board_width + self.PADDING * 2
-        # 将顶部面板、棋盘和上下留白相加得到窗口高度。
-        window_height = board_height + self.HEADER_HEIGHT + self.PADDING * 3
+        window_width = max(board_width + self.PADDING * 2, self.MIN_WINDOW_WIDTH)
+        # 将难度栏、顶部面板、棋盘和各段留白相加得到窗口高度。
+        window_height = board_height + self.DIFFICULTY_HEIGHT + self.HEADER_HEIGHT + self.PADDING * 4
         # 创建与当前棋盘相匹配的窗口。
         self.screen = pygame.display.set_mode((window_width, window_height))
         # 设置窗口标题。
         pygame.display.set_caption("Minesweeper")
+        # 保存难度选择栏的位置与尺寸。
+        self.difficulty_rect = pygame.Rect(self.PADDING, self.PADDING, window_width - self.PADDING * 2, self.DIFFICULTY_HEIGHT)
         # 保存顶部信息面板的位置与尺寸。
-        self.header_rect = pygame.Rect(self.PADDING, self.PADDING, board_width, self.HEADER_HEIGHT)
+        self.header_rect = pygame.Rect(self.PADDING, self.difficulty_rect.bottom + self.PADDING, window_width - self.PADDING * 2, self.HEADER_HEIGHT)
         # 保存棋盘区域的位置与尺寸。
-        self.board_rect = pygame.Rect(self.PADDING, self.PADDING + self.HEADER_HEIGHT + self.PADDING, board_width, board_height)
+        self.board_rect = pygame.Rect((window_width - board_width) // 2, self.header_rect.bottom + self.PADDING, board_width, board_height)
         # 将笑脸按钮放在顶部面板中央。
         self.face_rect = pygame.Rect(0, 0, self.FACE_SIZE, self.FACE_SIZE)
         # 设置笑脸按钮的中心坐标。
         self.face_rect.center = self.header_rect.center
+        # 按当前窗口宽度创建三个等宽难度按钮。
+        self._create_difficulty_buttons()
+
+    # 创建 Beginner、Intermediate 和 Expert 三个难度按钮。
+    def _create_difficulty_buttons(self) -> None:
+        # 定义按钮间的水平间距。
+        gap = 4
+        # 计算三个按钮共享的宽度。
+        button_width = (self.difficulty_rect.width - gap * 2) // 3
+        # 定义按钮显示文本及对应难度。
+        options = (
+            # 初级难度选项。
+            ("Beginner", Difficulty.BEGINNER),
+            # 中级难度选项。
+            ("Intermediate", Difficulty.INTERMEDIATE),
+            # 专家难度选项。
+            ("Expert", Difficulty.EXPERT),
+        # 结束难度选项元组。
+        )
+        # 保存每个按钮的文本、难度和矩形区域。
+        self.difficulty_buttons = []
+        # 依次创建三个按钮。
+        for index, (label, difficulty) in enumerate(options):
+            # 计算当前按钮的横坐标。
+            x = self.difficulty_rect.left + index * (button_width + gap)
+            # 让最后一个按钮填满舍入后剩余的空间。
+            width = self.difficulty_rect.right - x if index == 2 else button_width
+            # 创建当前按钮的矩形。
+            rect = pygame.Rect(x, self.difficulty_rect.top, width, self.DIFFICULTY_HEIGHT)
+            # 保存按钮信息供绘制和点击检测使用。
+            self.difficulty_buttons.append((label, difficulty, rect))
 
     # 运行窗口事件循环，可用帧数参数执行自动化冒烟检查。
     def run(self, max_frames: int | None = None) -> None:
@@ -144,6 +185,16 @@ class MinesweeperUI:
 
     # 处理鼠标按键按下事件。
     def _handle_mouse_down(self, event: pygame.event.Event) -> None:
+        # 左键点击难度按钮时切换难度并创建新棋盘。
+        if event.button == 1:
+            # 遍历所有难度按钮查找点击目标。
+            for _label, difficulty, rect in self.difficulty_buttons:
+                # 检查鼠标是否位于当前按钮内。
+                if rect.collidepoint(event.pos):
+                    # 切换难度并重新计算窗口布局。
+                    self._select_difficulty(difficulty)
+                    # 难度点击不再传递给其他控件。
+                    return
         # 左键点击笑脸按钮时重新开始当前难度。
         if event.button == 1 and self.face_rect.collidepoint(event.pos):
             # 重置游戏核心状态。
@@ -162,16 +213,57 @@ class MinesweeperUI:
         row = (event.pos[1] - self.board_rect.top) // self.CELL_SIZE
         # 左键用于翻开格子。
         if event.button == 1:
-            # 调用经过测试的核心翻开逻辑。
-            result = self.game.left_click(row, col)
+            # 取得目标格子状态以判断是否执行快速翻开。
+            cell = self.game.board.grid[row][col]
+            # 双击已翻开的数字时执行快速翻开。
+            if getattr(event, "clicks", 1) >= 2 and cell.is_revealed and cell.adjacent_mines > 0:
+                # 调用核心层的快速翻开规则。
+                result = self.game.chord(row, col)
+            # 普通左键仍只翻开目标格子。
+            else:
+                # 调用经过测试的核心翻开逻辑。
+                result = self.game.left_click(row, col)
             # 踩雷时记住被点击的地雷位置。
             if result.hit_mine:
-                # 保存爆炸坐标供绘制方法使用。
-                self.exploded_cell = (row, col)
+                # 从批量结果中找出实际被翻开的地雷。
+                self.exploded_cell = next(
+                    # 返回第一个含雷的已翻开坐标。
+                    (position for position in result.revealed if self.game.board.grid[position[0]][position[1]].is_mine),
+                    # 无法找到时回退到原始点击坐标。
+                    (row, col),
+                # 结束地雷坐标查找。
+                )
         # 右键用于插旗或取消旗子。
         elif event.button == 3:
-            # 调用经过测试的核心插旗逻辑。
-            self.game.right_click(row, col)
+            # 取得目标格子状态以区分快速翻开和插旗。
+            cell = self.game.board.grid[row][col]
+            # 右键已翻开的数字时执行快速翻开。
+            if cell.is_revealed and cell.adjacent_mines > 0:
+                # 调用核心层的快速翻开规则。
+                result = self.game.chord(row, col)
+                # 错误插旗导致踩雷时记录实际爆炸位置。
+                if result.hit_mine:
+                    # 从批量结果中找出被翻开的地雷。
+                    self.exploded_cell = next(
+                        # 返回第一个含雷的已翻开坐标。
+                        (position for position in result.revealed if self.game.board.grid[position[0]][position[1]].is_mine),
+                        # 无法找到时回退到数字格坐标。
+                        (row, col),
+                    # 结束地雷坐标查找。
+                    )
+            # 右键未翻开的格子仍切换旗子。
+            else:
+                # 调用经过测试的核心插旗逻辑。
+                self.game.right_click(row, col)
+
+    # 切换到指定难度并按新棋盘大小重建窗口。
+    def _select_difficulty(self, difficulty: Difficulty) -> None:
+        # 使用核心层已有的重开方法切换配置。
+        self.game.restart(difficulty)
+        # 清除上一局的爆炸位置。
+        self.exploded_cell = None
+        # 按新难度的棋盘尺寸重建窗口和控件布局。
+        self._create_window()
 
     # 绘制完整的一帧界面。
     def draw(self) -> None:
@@ -179,10 +271,44 @@ class MinesweeperUI:
         self.screen.fill(FACE_COLOR)
         # 绘制窗口外层的凸起边框。
         draw_bevel(self.screen, self.screen.get_rect(), raised=True, width=3)
+        # 绘制难度选择按钮。
+        self._draw_difficulty_buttons()
         # 绘制顶部信息面板。
         self._draw_header()
         # 绘制棋盘和所有格子。
         self._draw_board()
+        # 根据最新游戏状态更新窗口标题。
+        self._update_caption()
+
+    # 绘制难度选择栏中的三个按钮。
+    def _draw_difficulty_buttons(self) -> None:
+        # 遍历三个难度按钮。
+        for label, difficulty, rect in self.difficulty_buttons:
+            # 当前难度使用凹陷样式，其余难度使用凸起样式。
+            selected = difficulty is self.game.difficulty
+            # 填充按钮背景。
+            pygame.draw.rect(self.screen, FACE_COLOR, rect)
+            # 绘制反映选择状态的立体边框。
+            draw_bevel(self.screen, rect, raised=not selected, width=2)
+            # 渲染按钮名称。
+            text = self.menu_font.render(label, True, (0, 0, 0))
+            # 将按钮名称绘制在矩形中央。
+            self.screen.blit(text, text.get_rect(center=rect.center))
+
+    # 根据游戏状态设置明确的窗口标题。
+    def _update_caption(self) -> None:
+        # 获胜时在标题中显示胜利信息。
+        if self.game.status is GameStatus.WON:
+            # 设置胜利标题。
+            pygame.display.set_caption("Minesweeper - You won!")
+        # 失败时在标题中显示失败信息。
+        elif self.game.status is GameStatus.LOST:
+            # 设置失败标题。
+            pygame.display.set_caption("Minesweeper - Game over")
+        # 游戏未结束时使用普通标题。
+        else:
+            # 恢复默认窗口标题。
+            pygame.display.set_caption("Minesweeper")
 
     # 绘制顶部地雷计数器、笑脸和计时器。
     def _draw_header(self) -> None:
@@ -195,7 +321,7 @@ class MinesweeperUI:
         # 创建右侧计时器矩形。
         timer_rect = pygame.Rect(self.header_rect.right - 74, self.header_rect.top + 9, 66, 36)
         # 绘制剩余地雷数量。
-        self._draw_counter(mine_rect, self.game.remaining_mines)
+        self._draw_counter(mine_rect, 0 if self.game.status is GameStatus.WON else self.game.remaining_mines)
         # 绘制已经经过的秒数。
         self._draw_counter(timer_rect, self.game.elapsed_seconds)
         # 绘制中央的笑脸重开按钮。
@@ -301,7 +427,7 @@ class MinesweeperUI:
             # 绘制凸起边框。
             draw_bevel(self.screen, rect, raised=True, width=2)
             # 已插旗的格子绘制旗子图标。
-            if cell.is_flagged:
+            if cell.is_flagged or (self.game.status is GameStatus.WON and cell.is_mine):
                 # 绘制当前格子中的旗子。
                 self._draw_flag(rect)
 
