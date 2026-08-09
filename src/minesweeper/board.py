@@ -1,10 +1,8 @@
 """扫雷棋盘规则，完全独立于 Pygame。"""
 
 from collections import deque
-# 导入可注入的伪随机数生成器类型。
 from random import Random
 
-# 导入单元格状态和翻开结果模型。
 from .models import Cell, RevealResult
 
 
