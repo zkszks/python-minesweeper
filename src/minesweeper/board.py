@@ -1,5 +1,6 @@
 """扫雷棋盘规则，完全独立于 Pygame。"""
 
+from collections import deque
 # 导入可注入的伪随机数生成器类型。
 from random import Random
 
@@ -115,6 +116,11 @@ class Board:
     def reveal(self, row: int, col: int) -> RevealResult:
         # 首先确保目标坐标有效。
         self._validate_position(row, col)
+        # 已翻开或已插旗的格子无需处理。
+        # 必须在延迟布雷前判断，否则点击旗子会偷偷消耗“首次安全”。
+        first_cell = self.grid[row][col]
+        if first_cell.is_revealed or first_cell.is_flagged:
+            return RevealResult(())
         # 第一次翻开时延迟生成地雷，确保首格安全。
         if not self.mines_generated:
             # 以当前点击格作为安全格生成雷区。
@@ -122,10 +128,6 @@ class Board:
 
         # 取得玩家最初点击的单元格。
         first_cell = self.grid[row][col]
-        # 已翻开或已插旗的格子无需处理。
-        if first_cell.is_revealed or first_cell.is_flagged:
-            # 返回不包含任何新格子的结果。
-            return RevealResult(())
         # 点击地雷时立即处理失败结果。
         if first_cell.is_mine:
             # 将被点击的地雷翻开。
@@ -136,13 +138,13 @@ class Board:
         # 保存本次操作实际翻开的格子坐标。
         revealed: list[tuple[int, int]] = []
         # 用队列从目标格开始执行广度优先扩展。
-        queue = [(row, col)]
+        queue = deque([(row, col)])
         # 记录已经入队的坐标，避免重复处理。
         queued = {(row, col)}
         # 只要队列中仍有待处理格子就继续扩展。
         while queue:
             # 取出队首坐标作为当前处理目标。
-            current_row, current_col = queue.pop(0)
+            current_row, current_col = queue.popleft()
             # 取得当前坐标对应的单元格。
             cell = self.grid[current_row][current_col]
             # 跳过已翻开、已插旗或含雷的格子。

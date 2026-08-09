@@ -58,6 +58,20 @@ def test_flagged_cell_cannot_be_revealed_and_flag_can_be_cancelled():
     assert not board.grid[0][0].is_flagged
 
 
+def test_clicking_flag_before_first_reveal_does_not_generate_mines():
+    board = Board(3, 3, 1, random.Random(2))
+    board.toggle_flag(0, 0)
+
+    assert board.reveal(0, 0).revealed == ()
+    assert not board.mines_generated
+
+    board.toggle_flag(0, 0)
+    result = board.reveal(0, 0)
+    assert not result.hit_mine
+    assert board.mines_generated
+    assert not board.grid[0][0].is_mine
+
+
 def test_revealing_mine_reports_hit_and_reveals_all_mines():
     board = Board(2, 2, 1)
     board.grid[0][0].is_mine = True

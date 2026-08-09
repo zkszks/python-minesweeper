@@ -3,12 +3,19 @@
 # 导入 Pygame，负责窗口、绘图和输入事件。
 import pygame
 
-# 导入游戏状态管理类。
-from .game import Game
-# 导入难度枚举，用于创建难度选择按钮。
-from .config import Difficulty
-# 导入游戏状态枚举。
-from .models import GameStatus
+# 兼容包导入与直接执行 ``python src/minesweeper/ui.py``。
+if __package__:
+    from .config import Difficulty
+    from .game import Game
+    from .models import GameStatus
+else:
+    from pathlib import Path
+    import sys
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from minesweeper.config import Difficulty
+    from minesweeper.game import Game
+    from minesweeper.models import GameStatus
 
 # 定义经典界面的基础灰色。
 FACE_COLOR = (192, 192, 192)
@@ -454,3 +461,7 @@ class MinesweeperUI:
         pygame.draw.polygon(self.screen, (255, 0, 0), [(pole_x, rect.top + 5), (rect.left + 5, rect.top + 10), (pole_x, rect.top + 13)])
         # 绘制旗杆底座。
         pygame.draw.line(self.screen, (0, 0, 0), (rect.left + 7, rect.bottom - 6), (rect.right - 6, rect.bottom - 6), 2)
+
+
+if __name__ == "__main__":
+    MinesweeperUI().run()
